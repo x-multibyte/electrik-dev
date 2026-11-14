@@ -850,6 +850,7 @@ use Electrik\Models\Team;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 final class A2aServerController // @pest-arch-ignore-line
 {
@@ -966,7 +967,7 @@ final class A2aServerController // @pest-arch-ignore-line
             ], 422);
         }
 
-        if (class_exists(Team::class) && ! Team::query()->whereKey($teamId)->exists()) {
+        if (class_exists(Team::class) && Schema::hasTable((new Team)->getTable()) && ! Team::query()->whereKey($teamId)->exists()) {
             return response()->json([
                 'id' => $validated['id'],
                 'status' => 'failed',
@@ -1141,6 +1142,7 @@ use Electrik\Models\Team;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 final class RunTenantAdkWorkflowJob implements ShouldQueue
@@ -1202,9 +1204,9 @@ final class RunTenantAdkWorkflowJob implements ShouldQueue
         }
 
         $totalTokens = (int) data_get($data, 'metadata.usage.total_tokens', 0);
-        if ($totalTokens > 0 && class_exists(Team::class)) {
+        if ($totalTokens > 0 && class_exists(Team::class) && Schema::hasTable((new Team)->getTable())) {
             $team = Team::query()->find($this->teamId);
-            if ($team !== null) {
+            if ($team !== null && (! method_exists($team, 'hasStripeId') || $team->hasStripeId())) {
                 if (method_exists($team, 'reportMeterEvent')) {
                     $team->reportMeterEvent('ai_workflow_tokens', quantity: $totalTokens);
                 } else {

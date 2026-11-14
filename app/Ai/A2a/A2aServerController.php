@@ -10,6 +10,7 @@ use Electrik\Models\Team;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 final class A2aServerController // @pest-arch-ignore-line
 {
@@ -126,7 +127,7 @@ final class A2aServerController // @pest-arch-ignore-line
             ], 422);
         }
 
-        if (class_exists(Team::class) && ! Team::query()->whereKey($teamId)->exists()) {
+        if (class_exists(Team::class) && Schema::hasTable((new Team)->getTable()) && ! Team::query()->whereKey($teamId)->exists()) {
             return response()->json([
                 'id' => $validated['id'],
                 'status' => 'failed',

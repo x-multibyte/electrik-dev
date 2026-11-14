@@ -9,6 +9,7 @@ use Electrik\Models\Team;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 final class RunTenantAdkWorkflowJob implements ShouldQueue
@@ -70,9 +71,9 @@ final class RunTenantAdkWorkflowJob implements ShouldQueue
         }
 
         $totalTokens = (int) data_get($data, 'metadata.usage.total_tokens', 0);
-        if ($totalTokens > 0 && class_exists(Team::class)) {
+        if ($totalTokens > 0 && class_exists(Team::class) && Schema::hasTable((new Team)->getTable())) {
             $team = Team::query()->find($this->teamId);
-            if ($team !== null) {
+            if ($team !== null && (! method_exists($team, 'hasStripeId') || $team->hasStripeId())) {
                 if (method_exists($team, 'reportMeterEvent')) {
                     $team->reportMeterEvent('ai_workflow_tokens', quantity: $totalTokens);
                 } else {

@@ -12,6 +12,14 @@
         "infer-conventions",
         "laravel-best-practices",
         "testing-best-practices",
-        "tailwindcss-development"
+        "socialite-development",
+        "tailwindcss-development",
+        "adk-a2a-bridge",
+        "electrik-cashier-billing",
+        "electrik-tenant-scaffold",
+        "laravel-migration-validator",
+        "laravel-pest-verify",
+        "laravel-pint-fix",
+        "slate-blade-ui"
     ]
 }
