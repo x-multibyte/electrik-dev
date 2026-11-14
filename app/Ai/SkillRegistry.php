@@ -21,6 +21,14 @@ final class SkillRegistry
     }
 
     /**
+     * Determine whether a skill name is registered.
+     */
+    public function has(string $name): bool
+    {
+        return isset($this->paths[$name]);
+    }
+
+    /**
      * Load a registered skill's markdown body without YAML frontmatter.
      */
     public function load(string $name): string

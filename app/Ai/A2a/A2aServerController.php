@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Ai\A2a;
 
 use App\Ai\Agents\TenantCopilotAgent;
+use App\Ai\SkillRegistry;
+use Electrik\Models\Team;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -52,6 +54,17 @@ final class A2aServerController // @pest-arch-ignore-line
     public function handleTask(Request $request): JsonResponse
     {
         $expectedKey = (string) config('services.adk.server_api_key', '');
+        if (! app()->environment(['local', 'testing']) && $expectedKey === '') {
+            return response()->json([
+                'id' => (string) $request->input('id', ''),
+                'status' => 'failed',
+                'error' => [
+                    'code' => 'A2A_AUTH_NOT_CONFIGURED',
+                    'message' => 'A2A server API key must be configured outside local/testing environments.',
+                ],
+            ], 503);
+        }
+
         if ($expectedKey !== '' && ! hash_equals($expectedKey, (string) $request->header('X-A2A-Api-Key', ''))) {
             return response()->json([
                 'id' => (string) $request->input('id', ''),
@@ -71,8 +84,38 @@ final class A2aServerController // @pest-arch-ignore-line
             'metadata' => ['nullable', 'array'],
         ]);
 
-        $teamId = (int) ($request->header('X-Electrik-Team-Id') ?? data_get($validated, 'metadata.team_id', 0));
-        if ($teamId <= 0) {
+        $rawHeaderTeam = $request->header('X-Electrik-Team-Id');
+        $rawMetaTeam = data_get($validated, 'metadata.team_id');
+        $hasHeaderTeam = $rawHeaderTeam !== null && $rawHeaderTeam !== '';
+        $hasMetaTeam = $rawMetaTeam !== null && $rawMetaTeam !== '';
+
+        $headerTeamId = $hasHeaderTeam ? $this->parsePositiveTeamId($rawHeaderTeam) : null;
+        $metaTeamId = $hasMetaTeam ? $this->parsePositiveTeamId($rawMetaTeam) : null;
+
+        if (($hasHeaderTeam && $headerTeamId === null) || ($hasMetaTeam && $metaTeamId === null)) {
+            return response()->json([
+                'id' => $validated['id'],
+                'status' => 'failed',
+                'error' => [
+                    'code' => 'MISSING_TENANT_CONTEXT',
+                    'message' => 'Valid positive integer X-Electrik-Team-Id header or metadata.team_id is required.',
+                ],
+            ], 422);
+        }
+
+        if ($headerTeamId !== null && $metaTeamId !== null && $headerTeamId !== $metaTeamId) {
+            return response()->json([
+                'id' => $validated['id'],
+                'status' => 'failed',
+                'error' => [
+                    'code' => 'TENANT_CONTEXT_MISMATCH',
+                    'message' => 'X-Electrik-Team-Id header does not match metadata.team_id.',
+                ],
+            ], 422);
+        }
+
+        $teamId = $headerTeamId ?? $metaTeamId;
+        if ($teamId === null) {
             return response()->json([
                 'id' => $validated['id'],
                 'status' => 'failed',
@@ -83,10 +126,31 @@ final class A2aServerController // @pest-arch-ignore-line
             ], 422);
         }
 
-        $userPrompt = (string) data_get($validated, 'message.parts.0.text', '');
-        Log::info('A2A Task received', ['id' => $validated['id'], 'team_id' => $teamId]);
+        if (class_exists(Team::class) && ! Team::query()->whereKey($teamId)->exists()) {
+            return response()->json([
+                'id' => $validated['id'],
+                'status' => 'failed',
+                'error' => [
+                    'code' => 'TEAM_NOT_FOUND',
+                    'message' => 'Specified Electrik team context does not exist.',
+                ],
+            ], 404);
+        }
 
-        $agent = new TenantCopilotAgent($teamId);
+        $requestedSkill = (string) (data_get($validated, 'metadata.skill_hint')
+            ?? data_get($validated, 'metadata.skill')
+            ?? 'adk-a2a-bridge');
+
+        /** @var SkillRegistry $registry */
+        $registry = app(SkillRegistry::class);
+        $skillName = $requestedSkill !== '' && $registry->has($requestedSkill)
+            ? $requestedSkill
+            : 'adk-a2a-bridge';
+
+        $userPrompt = (string) data_get($validated, 'message.parts.0.text', '');
+        Log::info('A2A Task received', ['id' => $validated['id'], 'team_id' => $teamId, 'skill' => $skillName]);
+
+        $agent = new TenantCopilotAgent($teamId, $skillName);
         $agentResponse = (string) $agent->prompt($userPrompt);
 
         return response()->json([
@@ -100,8 +164,26 @@ final class A2aServerController // @pest-arch-ignore-line
             ],
             'metadata' => [
                 'team_id' => $teamId,
+                'skill' => $skillName,
                 'processed_at' => now()->toISOString(),
             ],
         ]);
+    }
+
+    private function parsePositiveTeamId(mixed $value): ?int
+    {
+        if (is_bool($value) || (! is_int($value) && ! is_string($value))) {
+            return null;
+        }
+
+        if (is_string($value) && ! preg_match('/^[1-9]\d*$/', $value)) {
+            return null;
+        }
+
+        $parsed = filter_var($value, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1],
+        ]);
+
+        return $parsed === false ? null : $parsed;
     }
 }

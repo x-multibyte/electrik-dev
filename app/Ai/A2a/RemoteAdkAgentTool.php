@@ -33,7 +33,11 @@ final class RemoteAdkAgentTool implements Tool
      */
     public function handle(Request $request): Stringable|string
     {
-        $endpoint = $this->endpoint ?: (string) config('services.adk.endpoint', 'http://127.0.0.1:8080/a2a/tasks/send');
+        $configuredEndpoint = config('services.adk.endpoint');
+        $defaultEndpoint = is_string($configuredEndpoint) && $configuredEndpoint !== ''
+            ? $configuredEndpoint
+            : 'http://127.0.0.1:8080/a2a/tasks/send';
+        $endpoint = ($this->endpoint !== null && $this->endpoint !== '') ? $this->endpoint : $defaultEndpoint;
         $apiKey = $this->apiKey ?? (string) config('services.adk.api_key', '');
         $taskPrompt = (string) ($request['task_prompt'] ?? '');
         $skillHint = (string) ($request['skill_hint'] ?? '');
@@ -69,7 +73,13 @@ final class RemoteAdkAgentTool implements Tool
             throw new RuntimeException("Remote ADK A2A request failed with HTTP {$response->status()}.");
         }
 
-        return (string) data_get($response->json(), 'message.parts.0.text', '');
+        $data = $response->json();
+        if (data_get($data, 'status') === 'failed') {
+            $errorMessage = (string) data_get($data, 'error.message', 'Unknown A2A error');
+            throw new RuntimeException("A2A agent execution failed: {$errorMessage}");
+        }
+
+        return (string) data_get($data, 'message.parts.0.text', '');
     }
 
     /**

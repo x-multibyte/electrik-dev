@@ -19,10 +19,12 @@ In Electrik SaaS, Stripe Cashier subscriptions, entitlements, add-ons, and meter
 - Gate premium actions and API/ADK quotas at the team level before dispatching paid workloads.
 
 ## 3. Metered Usage Reporting
-- Report metered consumption via queued jobs or team billing helpers after successful execution:
+- Report metered consumption via queued jobs (`RunTenantAdkWorkflowJob`) on the active `Team` using Stripe Billing Meters (`$team->reportMeterEvent('ai_workflow_tokens', quantity: $totalTokens)`) or subscription item usage (`$team->subscription('default')?->reportUsage($totalTokens)`):
   ```php
   if (method_exists($team, 'reportMeterEvent')) {
-      $team->reportMeterEvent('ai_workflow_runs', quantity: 1);
+      $team->reportMeterEvent('ai_workflow_tokens', quantity: $totalTokens);
+  } else {
+      $team->subscription('default')?->reportUsage($totalTokens);
   }
   ```
 - Always include fallback logging/no-op handling when teams run in local sandbox or free-tier mode without an active Stripe customer.

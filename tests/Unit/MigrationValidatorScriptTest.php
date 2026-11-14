@@ -53,3 +53,36 @@ it('rejects Schema::dropIfExists of core tables in up() or standalone drop migra
     @unlink($dropCoreInUp);
     @rmdir($tmpDir);
 });
+
+it('rejects ->truncate(), missing up(), and standalone Schema::dropIfExists in down()', function () {
+    $script = base_path('.agents/skills/laravel-migration-validator/scripts/validate_migration.py');
+
+    $tmpDir = sys_get_temp_dir().'/electrik_mig_extra_'.bin2hex(random_bytes(4));
+    mkdir($tmpDir, 0777, true);
+
+    $truncateFile = "{$tmpDir}/2026_11_11_000004_truncate_users.php";
+    file_put_contents($truncateFile, "<?php\nreturn new class {\npublic function up(): void { DB::table('users')->truncate(); }\npublic function down(): void {}\n};\n");
+
+    $truncateResult = Process::run(['python3', $script, $truncateFile]);
+    expect($truncateResult->failed())->toBeTrue()
+        ->and($truncateResult->output())->toContain('[MIGRATION_ERROR]');
+
+    $missingUpFile = "{$tmpDir}/2026_11_11_000005_missing_up.php";
+    file_put_contents($missingUpFile, "<?php\nreturn new class {\npublic function down(): void {}\n};\n");
+
+    $missingUpResult = Process::run(['python3', $script, $missingUpFile]);
+    expect($missingUpResult->failed())->toBeTrue()
+        ->and($missingUpResult->output())->toContain('[MIGRATION_ERROR]');
+
+    $standaloneDownDropFile = "{$tmpDir}/2026_11_11_000006_drop_teams_in_down.php";
+    file_put_contents($standaloneDownDropFile, "<?php\nreturn new class {\npublic function up(): void {}\npublic function down(): void { Schema::dropIfExists('teams'); }\n};\n");
+
+    $standaloneResult = Process::run(['python3', $script, $standaloneDownDropFile]);
+    expect($standaloneResult->failed())->toBeTrue()
+        ->and($standaloneResult->output())->toContain('[MIGRATION_ERROR]');
+
+    @unlink($truncateFile);
+    @unlink($missingUpFile);
+    @unlink($standaloneDownDropFile);
+    @rmdir($tmpDir);
+});

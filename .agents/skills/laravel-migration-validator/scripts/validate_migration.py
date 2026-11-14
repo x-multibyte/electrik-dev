@@ -8,14 +8,14 @@ import re
 import sys
 
 CORE_TABLES = ("users", "teams", "subscriptions")
-DOWN_FN_RE = re.compile(r"function\s+down\s*\(", re.IGNORECASE)
 UP_FN_RE = re.compile(r"function\s+up\s*\(", re.IGNORECASE)
+DOWN_FN_RE = re.compile(r"function\s+down\s*\(", re.IGNORECASE)
 DESTRUCTIVE_SQL_RE = re.compile(
-    r"\b(?:DROP\s+TABLE|TRUNCATE\s+TABLE|TRUNCATE\s+`?[a-zA-Z0-9_]+`?)\b",
-    re.IGNORECASE,
+    r"(?:\bDROP\s+TABLE\b|\bTRUNCATE\s+(?:TABLE\s+)?[a-zA-Z0-9_`]+|->truncate\s*\(|\bSchema::dropAllTables\s*\(|\bDB::unprepared\s*\([^;]*(?:\bDROP\b|\bTRUNCATE\b))",
+    re.IGNORECASE | re.DOTALL,
 )
 CORE_DROP_RE = re.compile(
-    r"Schema::drop(?:IfExists)?\(\s*['\"](users|teams|subscriptions)['\"]\s*\)",
+    rf"Schema::drop(?:IfExists)?\(\s*['\"]({'|'.join(CORE_TABLES)})['\"]\s*\)",
     re.IGNORECASE,
 )
 
@@ -23,17 +23,23 @@ CORE_DROP_RE = re.compile(
 def extract_up_section(content: str) -> str:
     """Return the portion of the migration file corresponding to up() before down()."""
     up_match = UP_FN_RE.search(content)
-    down_match = DOWN_FN_RE.search(content)
+    if not up_match:
+        return ""
 
-    start = up_match.start() if up_match else 0
-    end = down_match.start() if down_match and down_match.start() > start else len(content)
-    return content[start:end]
+    down_match = DOWN_FN_RE.search(content)
+    end = down_match.start() if down_match and down_match.start() > up_match.start() else len(content)
+    return content[up_match.start() : end]
 
 
 def validate_file(path: pathlib.Path) -> list[str]:
     """Return a list of validation error strings for a single migration file."""
     errors: list[str] = []
     content = path.read_text(encoding="utf-8")
+
+    if not UP_FN_RE.search(content):
+        errors.append(
+            f"[MIGRATION_ERROR] {path}: Missing up() method."
+        )
 
     if not DOWN_FN_RE.search(content):
         errors.append(
@@ -42,7 +48,7 @@ def validate_file(path: pathlib.Path) -> list[str]:
 
     if DESTRUCTIVE_SQL_RE.search(content):
         errors.append(
-            f"[MIGRATION_ERROR] {path}: Destructive SQL statement (DROP TABLE / TRUNCATE) detected."
+            f"[MIGRATION_ERROR] {path}: Destructive SQL or truncate() statement detected."
         )
 
     up_section = extract_up_section(content)
@@ -50,13 +56,13 @@ def validate_file(path: pathlib.Path) -> list[str]:
     down_section = content[down_match.start() :] if down_match else ""
 
     for match in CORE_DROP_RE.finditer(up_section):
-        table = match.group(1)
+        table = match.group(1).lower()
         errors.append(
             f"[MIGRATION_ERROR] {path}: Dropping core table '{table}' inside up() is forbidden."
         )
 
     for match in CORE_DROP_RE.finditer(down_section):
-        table = match.group(1)
+        table = match.group(1).lower()
         create_re = re.compile(
             rf"Schema::create\(\s*['\"]{re.escape(table)}['\"]",
             re.IGNORECASE,

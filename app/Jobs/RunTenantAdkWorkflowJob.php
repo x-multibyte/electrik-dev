@@ -28,7 +28,10 @@ final class RunTenantAdkWorkflowJob implements ShouldQueue
     public function handle(SkillRegistry $registry): void
     {
         $skillInstructions = $registry->load($this->skillName);
-        $endpoint = (string) config('services.adk.endpoint', 'http://127.0.0.1:8080/a2a/tasks/send');
+        $configuredEndpoint = config('services.adk.endpoint');
+        $endpoint = is_string($configuredEndpoint) && $configuredEndpoint !== ''
+            ? $configuredEndpoint
+            : 'http://127.0.0.1:8080/a2a/tasks/send';
         $apiKey = (string) config('services.adk.api_key', '');
 
         $headers = [
@@ -60,10 +63,22 @@ final class RunTenantAdkWorkflowJob implements ShouldQueue
             throw new RuntimeException("ADK workflow job [{$this->sessionId}] failed with HTTP {$response->status()}.");
         }
 
-        $totalTokens = (int) data_get($response->json(), 'metadata.usage.total_tokens', 0);
+        $data = $response->json();
+        if (data_get($data, 'status') === 'failed') {
+            $errorMessage = (string) data_get($data, 'error.message', 'Unknown A2A error');
+            throw new RuntimeException("ADK workflow job [{$this->sessionId}] failed: {$errorMessage}");
+        }
+
+        $totalTokens = (int) data_get($data, 'metadata.usage.total_tokens', 0);
         if ($totalTokens > 0 && class_exists(Team::class)) {
             $team = Team::query()->find($this->teamId);
-            $team?->subscription('default')?->reportUsage($totalTokens);
+            if ($team !== null) {
+                if (method_exists($team, 'reportMeterEvent')) {
+                    $team->reportMeterEvent('ai_workflow_tokens', quantity: $totalTokens);
+                } else {
+                    $team->subscription('default')?->reportUsage($totalTokens);
+                }
+            }
         }
     }
 }

@@ -146,3 +146,93 @@ it('executes RunTenantAdkWorkflowJob by injecting SkillRegistry instructions int
             && str_contains($sentText, 'Audit team invoices');
     });
 });
+
+it('fails closed in production when A2A server API key is not configured', function () {
+    config(['services.adk.server_api_key' => '']);
+
+    $previousEnv = app()->environment();
+    app()->detectEnvironment(static fn (): string => 'production');
+
+    try {
+        $response = $this->postJson('/api/a2a/tasks/send', [
+            'id' => 'task-prod-nokey',
+            'message' => [
+                'role' => 'user',
+                'parts' => [['text' => 'Check status']],
+            ],
+        ], [
+            'X-Electrik-Team-Id' => '10',
+        ]);
+
+        $response->assertStatus(503)
+            ->assertJsonPath('status', 'failed')
+            ->assertJsonPath('error.code', 'A2A_AUTH_NOT_CONFIGURED');
+    } finally {
+        app()->detectEnvironment(static fn (): string => (string) $previousEnv);
+    }
+});
+
+it('rejects non-numeric team_id strings and header vs metadata team_id mismatches', function () {
+    config(['services.adk.server_api_key' => 'secret-a2a-token']);
+
+    $malformed = $this->postJson('/api/a2a/tasks/send', [
+        'id' => 'task-bad-int',
+        'message' => [
+            'role' => 'user',
+            'parts' => [['text' => 'Check status']],
+        ],
+    ], [
+        'X-Electrik-Team-Id' => '10abc',
+        'X-A2A-Api-Key' => 'secret-a2a-token',
+    ]);
+
+    $malformed->assertStatus(422)
+        ->assertJsonPath('error.code', 'MISSING_TENANT_CONTEXT');
+
+    $mismatched = $this->postJson('/api/a2a/tasks/send', [
+        'id' => 'task-mismatch',
+        'message' => [
+            'role' => 'user',
+            'parts' => [['text' => 'Check status']],
+        ],
+        'metadata' => [
+            'team_id' => 99,
+        ],
+    ], [
+        'X-Electrik-Team-Id' => '10',
+        'X-A2A-Api-Key' => 'secret-a2a-token',
+    ]);
+
+    $mismatched->assertStatus(422)
+        ->assertJsonPath('error.code', 'TENANT_CONTEXT_MISMATCH');
+});
+
+it('throws RuntimeException when RemoteAdkAgentTool receives an A2A failed envelope and handles null endpoint config', function () {
+    config(['services.adk.endpoint' => null]);
+
+    Http::fake([
+        'http://127.0.0.1:8080/a2a/tasks/send' => Http::response([
+            'id' => 'task-err',
+            'status' => 'failed',
+            'error' => ['message' => 'Tenant quota exceeded'],
+        ], 200),
+    ]);
+
+    $tool = new RemoteAdkAgentTool(teamId: 42);
+
+    expect(fn () => $tool->handle(new ToolRequest([
+        'task_prompt' => 'Run heavy report',
+    ])))->toThrow(RuntimeException::class, 'Tenant quota exceeded');
+});
+
+it('documents canonical A2A headers and endpoints in adk-a2a-bridge skill', function () {
+    $skill = (string) file_get_contents(base_path('.agents/skills/adk-a2a-bridge/SKILL.md'));
+
+    expect($skill)
+        ->toContain('X-Electrik-Team-Id')
+        ->toContain('metadata.team_id')
+        ->toContain('X-A2A-Api-Key')
+        ->toContain('/api/a2a/tasks/send')
+        ->not->toContain('X-Tenant'.'-ID')
+        ->not->toContain('metadata.tenant'.'_id');
+});
