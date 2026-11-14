@@ -3,7 +3,7 @@ name: electrik-cashier-billing
 description: Implement or modify team-level Stripe subscriptions, plan feature gates, add-ons, and metered usage billing in Electrik using Laravel Cashier.
 ---
 
-# Electrik Cashier Team Billing
+# Electrik Team-Scoped Stripe Cashier Billing Skill
 
 In Electrik SaaS, Stripe Cashier subscriptions, entitlements, add-ons, and metered usage records attach to the **Team** model (`Electrik\Models\Team`), NOT the `User` model.
 
