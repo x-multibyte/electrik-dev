@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'adk' => [
+        'endpoint' => env('ADK_A2A_ENDPOINT', 'http://127.0.0.1:8080/a2a/tasks/send'),
+        'api_key' => env('ADK_A2A_API_KEY', ''),
+        'server_api_key' => env('A2A_SERVER_API_KEY', ''),
+    ],
+
 ];
