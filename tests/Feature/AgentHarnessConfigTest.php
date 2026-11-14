@@ -46,3 +46,21 @@ it('declares Electrik and Slate llms.txt endpoints and Boost block in AGENTS.md'
         ->toContain('https://slate.electrik.dev/llms.txt')
         ->toContain('<laravel-boost-guidelines>');
 });
+
+it('defines path-scoped Laravel Boost project rules in .ai/rules', function () {
+    $index = base_path('.ai/rules/index.md');
+    expect(is_file($index))->toBeTrue();
+
+    $ruleFiles = [
+        'electrik-package-boundary.md',
+        'team-tenancy-models.md',
+        'slate-livewire-views.md',
+        'controllers-and-requests.md',
+    ];
+
+    foreach ($ruleFiles as $file) {
+        $fullPath = base_path(".ai/rules/{$file}");
+        expect(is_file($fullPath))->toBeTrue();
+        expect((string) file_get_contents($fullPath))->toContain('paths:');
+    }
+});
