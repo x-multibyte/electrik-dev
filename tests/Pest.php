@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__.'/../bootstrap/laravel_ai_shims.php';
+
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
