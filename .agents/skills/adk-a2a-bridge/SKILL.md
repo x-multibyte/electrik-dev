@@ -3,7 +3,7 @@ name: adk-a2a-bridge
 description: Build and connect in-app AI agents using the Laravel AI SDK (PHP) and Google ADK 2.0 multi-agent workflows (Python/Go/TS) via the Agent2Agent (A2A) protocol and MCP.
 ---
 
-# Laravel AI SDK & Google ADK 2.0 A2A Bridge
+# Laravel AI SDK & Google ADK 2.0 Bridge Skill
 
 Connect in-app Laravel AI SDK agents (`App\Ai\Agents\*`) with Python Google ADK 2.0 multi-agent orchestrations (`adk_service/`) over HTTP using the Agent2Agent (A2A) JSON-RPC protocol.
 
