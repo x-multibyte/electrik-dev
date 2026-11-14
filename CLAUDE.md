@@ -1,3 +1,37 @@
+# Electrik Laravel 13 SaaS — AI Agent Engineering Constitution
+
+## 1. Authoritative Machine-Readable Documentation Endpoints
+Before planning routes, UI views, billing flows, or domain models, consult these canonical LLM indexes:
+- Electrik Core Index: https://electrik.dev/llms.txt
+- Electrik Full Reference: https://electrik.dev/llms-full.txt
+- Electrik AI & Agents Guide: https://electrik.dev/docs/getting-started/ai
+- Electrik Slate 3 UI Index: https://slate.electrik.dev/llms.txt
+- Electrik Slate 3 Full Dump: https://slate.electrik.dev/llms-full.txt
+- Electrik Slate MCP Guide: https://slate.electrik.dev/docs/ai
+- Google ADK 2.0 Guide: https://adk.dev/2.0/
+- Agent2Agent (A2A) Protocol: https://github.com/google-a2a/a2a-python
+
+## 2. Non-Negotiable Architectural Invariants
+1. **Package Encapsulation (`Electrik\` vs `App\`)**:
+   - Auth, teams, Stripe Cashier billing, onboarding, `/ops` operator console, and account settings live inside `vendor/electrik/electrik` under the `Electrik\` namespace.
+   - NEVER copy or fork `Electrik\` controllers, Livewire components, or views into `App\` unless explicitly instructed to override a specific published view.
+   - Customize shell behavior through `config/electrik.php` and `ELECTRIK_*` environment flags.
+2. **Team-as-Tenant Boundary (`BelongsToTeam`)**:
+   - The `Team` model is the primary boundary for multi-tenancy, Spatie permissions, and Laravel Cashier subscriptions.
+   - ALWAYS generate new tenant-scoped models and resources via `php artisan electrik:make:model <Name>` or `php artisan electrik:make:resource <Name>` (use `--no-team` ONLY for global system entities).
+   - Every tenant model MUST use the `BelongsToTeam` trait and scope all queries to the authenticated user's current team.
+3. **UI System (`<x-slate::*>` & Livewire 4)**:
+   - Use anonymous Blade components from Electrik Slate 3 (`<x-slate::*>`) and marketing sections from `<x-slate-block::*>`.
+   - Style exclusively with Tailwind CSS v4 tokens (`--slate-primary`, `--slate-background`, etc.) and built-in dark mode pairs.
+   - NEVER introduce React, Vue, Inertia, Flux UI, or shadcn/ui trees into an Electrik application.
+4. **Laravel 13 & PHP 8.4+ Cohesion**:
+   - Maintain Laravel 13's single-entry `bootstrap/app.php` structure. NEVER recreate `app/Http/Kernel.php` or `app/Console/Kernel.php`.
+   - NEVER create unapproved abstraction directories (`app/Services/`, `app/Repositories/`, `app/Actions/`). Keep domain logic in Eloquent Models, FormRequests, Policies, Queued Jobs, and Livewire Components.
+   - Use PHP 8.4 Property Hooks and Asymmetric Visibility (`public private(set)`) where appropriate, and use `casts(): array` method instead of `$casts` property on models.
+5. **Micro-Transaction Workflow in Antigravity 2.0 & CLI**:
+   - Follow Contract-Driven Development: write or update the Pest test first -> run `vendor/bin/pest` (Red) -> implement minimal code -> run `vendor/bin/pest` (Green) -> run `vendor/bin/pint --dirty --format agent` -> commit snapshot -> run `/clear` in Antigravity CLI to reset context.
+   - If architectural drift occurs, do not argue in chat; immediately `git checkout -- .` or `git reset` and restart from a clean `/clear` session.
+
 <laravel-boost-guidelines>
 === foundation rules ===
 
